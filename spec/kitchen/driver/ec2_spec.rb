@@ -23,7 +23,6 @@ require "kitchen/transport/dummy"
 require "kitchen/verifier/dummy"
 
 describe Kitchen::Driver::Ec2 do
-
   let(:logged_output) { StringIO.new }
   let(:logger)        { Logger.new(logged_output) }
   let(:config) do
@@ -745,5 +744,4 @@ describe Kitchen::Driver::Ec2 do
       end
     end
   end
-
 end
