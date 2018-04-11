@@ -89,8 +89,9 @@ module Kitchen
       default_config :retry_limit,         3
       default_config :tenancy,             "default"
       default_config :instance_initiated_shutdown_behavior, nil
-      default_config :ssl_verify_peer, true
-      default_config :skip_cost_warning, false
+      default_config :ssl_verify_peer,         true
+      default_config :skip_cost_warning,       false
+      default_config :terminate_after_minutes, nil
 
       def initialize(*args, &block)
         super
@@ -198,6 +199,13 @@ module Kitchen
           exit!
         end
       end
+      validations[:terminate_after_minutes] = lambda do |attr, val, _driver|
+        if !val.nil? && ((!val.is_a? Integer) || val <= 0)
+          warn "'#{val}' is an invalid value for option '#{attr}'. " \
+            "Value must be greater than 0"
+          exit!
+        end
+      end
 
       def create(state)
         return if state[:server_id]
@@ -227,6 +235,11 @@ module Kitchen
           info("Disabling AWS-managed SSH key pairs for this EC2 instance.")
           info("The key pairs for the kitchen transport config and the AMI must match.")
           config[:aws_ssh_key_id] = nil
+        end
+
+        # Override instance_initiated_shutdown_behavior if terminate_after_minutes is set
+        if config[:terminate_after_minutes] && config[:terminate_after_minutes] > 0
+          config[:instance_initiated_shutdown_behavior] = "terminate"
         end
 
         if config[:spot_price]
@@ -279,6 +292,9 @@ module Kitchen
           # supplied, try to fetch it from the AWS instance
           fetch_windows_admin_password(server, state)
         end
+
+        # Setup code to trigger termination after 'x' minutes
+        create_termination_settings(state) if config[:terminate_after_minutes] && config[:terminate_after_minutes] > 0
 
         info("EC2 instance <#{state[:server_id]}> ready (hostname: #{state[:hostname]}).")
         instance.transport.connection(state).wait_until_ready
@@ -819,6 +835,15 @@ module Kitchen
         ec2.client.delete_key_pair(key_name: state[:auto_key_id])
         state.delete(:auto_key_id)
         File.unlink("#{config[:kitchen_root]}/.kitchen/#{instance.name}.pem")
+      end
+
+      def create_termination_settings(state)
+        if windows_os?
+          cmd = ""
+        else
+          cmd = "#{sudo_command} echo $(date --date=\"today + 55 minutes\" +\"%M %H %d %m\") \"*  shutdown -h now\" >> /var/spool/cron/root"
+        end
+        instance.transport.connection(state).execute(cmd)
       end
 
     end

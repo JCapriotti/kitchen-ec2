@@ -729,6 +729,30 @@ describe Kitchen::Driver::Ec2 do
         include_examples "common create"
       end
     end
+
+    context "when terminate_after_minutes is not set" do
+      before do
+        expect(driver).to_not receive(:create_termination_settings).with(state)
+        expect(driver).to receive(:submit_server).and_return(server)
+      end
+
+      include_examples "common create"
+    end
+
+    context "when terminate_after_minutes is set" do
+      before do
+        config[:terminate_after_minutes] = 50
+        config[:instance_initiated_shutdown_behavior] = nil
+        expect(driver).to receive(:create_termination_settings).with(state)
+        expect(driver).to receive(:submit_server).and_return(server)
+      end
+
+      after do
+        expect(config[:instance_initiated_shutdown_behavior]).to eq("terminate")
+      end
+
+      include_examples "common create"
+    end
   end
 
   describe "#destroy" do
